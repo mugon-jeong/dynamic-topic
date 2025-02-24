@@ -1,0 +1,34 @@
+spring:
+    kafka:
+        bootstrap-servers: localhost:9094
+        properties:
+            request:
+                timeout.ms: 60000
+            connections:
+                max.idle.ms: 600000
+        consumer:
+            auto-offset-reset: latest
+            enable-auto-commit: true
+            key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+            value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+        producer:
+            acks: all
+            retries: 3
+            key-serializer: org.apache.kafka.common.serialization.StringSerializer
+            value-serializer: org.apache.kafka.common.serialization.StringSerializer
+        listener:
+            missing-topics-fatal: false # 동적으로 토픽을 구독할 때 필요
+    datasource:
+        url: jdbc:postgresql://localhost:5432/postgres  # PostgreSQL 주소
+        username: postgres  # 데이터베이스 사용자 이름
+        password: postgres  # 데이터베이스 비밀번호
+        driver-class-name: org.postgresql.Driver
+
+    jpa:
+        database-platform: org.hibernate.dialect.PostgreSQLDialect
+        hibernate:
+            ddl-auto: update  # 스키마 자동 생성 전략 (create, update, validate, none)
+        show-sql: true  # 실행되는 SQL 로그 출력
+        properties:
+            hibernate:
+                format_sql: true  # SQL을 보기 좋게 포맷

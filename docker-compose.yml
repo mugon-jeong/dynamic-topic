@@ -1,0 +1,52 @@
+services:
+    dynamic-db:
+        image: postgres
+        restart: always
+        container_name: dandi-db
+        ports:
+            - "5432:5432"
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+    kafka0:
+        restart: unless-stopped
+        container_name: kafka0
+        image: bitnami/kafka
+        ports:
+            - 9094:9094
+        user: root
+        environment:
+            # KRaft settings
+            # 노드의 고유 ID
+            - KAFKA_CFG_NODE_ID=0
+            - KAFKA_KRAFT_CLUSTER_ID=i09nc7WYTV6WX1oiEJmisA # 클러스터의 ID
+            - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka0:9093 # controller 역할을 수행할 유일한 노드
+            - KAFKA_CFG_PROCESS_ROLES=controller,broker # 이 노드가 controller와 broker 역할을 모두 수행
+            - ALLOW_PLAINTEXT_LISTENER=yes
+            - KAFKA_CFG_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9094
+            - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka0:9092,EXTERNAL://localhost:9094
+            - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+            - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+            - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+            - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1 # 단일 브로커이므로 복제 수는 1로 설정
+            - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 # 단일 브로커이므로 복제 수는 1로 설정
+            - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1 # 최소 ISR은 1로 설정
+            - KAFKA_CFG_DEFAULT_REPLICATION_FACTOR=1 # 단일 브로커이므로 복제 수는 1로 설정
+            - KAFKA_CFG_CONNECTIONS_MAX_IDLE_MS=600000 # 연결이 유휴 상태일 때 유지되는 시간 (밀리초)
+            - KAFKA_CFG_REQUEST_TIMEOUT_MS=60000 # 클라이언트 요청 타임아웃 시간 (밀리초)
+        volumes:
+            - ${VOLUMES}/kafka_data0:/bitnami/kafka
+
+    KafkaWebUiService:
+        image: provectuslabs/kafka-ui:latest
+        restart: unless-stopped
+        container_name: KafkaWebUiContainer
+        ports:
+            - 20800:8080
+        user: root
+        environment:
+            - KAFKA_CLUSTERS_0_NAME=Local-Kraft-Cluster
+            - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka0:9092 # 단일 노드 Kafka 브로커를 사용
+            - DYNAMIC_CONFIG_ENABLED=true
+            - KAFKA_CLUSTERS_0_AUDIT_TOPICAUDITENABLED=true
+            - KAFKA_CLUSTERS_0_AUDIT_CONSOLEAUDITENABLED=true
