@@ -1,5 +1,6 @@
 package net.musma.dandi.dynamictopic.domain
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 
 @Entity
@@ -12,7 +13,14 @@ data class PipelineNode(
     @Column(nullable = false)
     val topic: String,
 
+    @Column(nullable = false)
+    val type: String,
+
+    @Column(nullable = false, columnDefinition = "TEXT")
+    val data: String,
+
     @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnore // ✅ 부모 노드 직렬화 방지
     @JoinColumn(name = "parent_id")
     var parent: PipelineNode? = null,
 

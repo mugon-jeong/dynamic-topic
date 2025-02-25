@@ -37,7 +37,7 @@ class DynamicKafkaConsumerService(
 
         val allPipelines = pipelineRepository.findAll()
         allPipelines.forEach { pipeline ->
-            val groupId = pipeline.groupId
+            val groupId = pipeline.id
             val rootNode = pipeline.rootNode ?: return@forEach
             logger.info { "🔄 파이프라인 등록: $groupId" }
             registerConsumersRecursively(groupId, rootNode)
@@ -164,10 +164,10 @@ class DynamicKafkaConsumerService(
     /**
      * ✅ 메시지 발행
      */
-    fun sendMessage(topic: String, message: String) {
+    fun sendMessage(consumerKey: ConsumerKey, message: String) {
         KafkaProducer<String, String>(createProducerProperties()).use { producer ->
-            producer.send(ProducerRecord(topic, message))
-            logger.info { "📤 메시지 전송 완료: [$message] → [$topic]" }
+            producer.send(ProducerRecord(consumerKey.toTopic(), message))
+            logger.info { "📤 메시지 전송 완료: [$message] → [${consumerKey.toTopic()}]" }
         }
     }
 
@@ -216,7 +216,7 @@ class DynamicKafkaConsumerService(
 
             // ✅ 자식 노드로 메시지 전달
             node.children.forEach { child ->
-                sendMessage(child.topic, receive)
+                sendMessage(ConsumerKey(groupId, child.topic), receive)
                 logger.info { "➡️ 메시지 [$receive] 를 [${node.topic}] → [${child.topic}] 로 전달" }
             }
         }

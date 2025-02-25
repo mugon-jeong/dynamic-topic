@@ -1,5 +1,6 @@
 package net.musma.dandi.dynamictopic.controller
 
+import net.musma.dandi.dynamictopic.domain.PipelineDto
 import net.musma.dandi.dynamictopic.domain.PipelineEntity
 import net.musma.dandi.dynamictopic.kafka.DynamicKafkaConsumerService
 import net.musma.dandi.dynamictopic.kafka.KafkaPipelineService
@@ -35,8 +36,8 @@ class KafkaPipelineController(
      * ✅ 파이프라인 등록 (POST /pipelines)
      */
     @PostMapping
-    fun registerPipeline(@RequestBody request: PipelineRequest): PipelineEntity {
-        return kafkaPipelineService.registerPipeline(request.groupId,request.rootTopic, request.topicRelations)
+    fun registerPipeline(@RequestBody request: PipelineDto): ResponseEntity<Map<String, String>> {
+        return ResponseEntity.ok(kafkaPipelineService.registerPipeline(request))
     }
 
     /**
@@ -49,11 +50,17 @@ class KafkaPipelineController(
         return ResponseEntity.ok("🚀 파이프라인 실행 시작 (groupId: $groupId, message: ${request.message})")
     }
 
+    @GetMapping("/{groupId}")
+    fun getPipeline(@PathVariable groupId: String): ResponseEntity<Map<String, Any>> {
+        val pipeline = kafkaPipelineService.getPipeline(groupId)
+        return ResponseEntity.ok(pipeline)
+    }
+
     /**
      * ✅ 모든 파이프라인 목록 조회 (GET /pipelines)
      */
     @GetMapping
-    fun getAllPipelines(): ResponseEntity<MutableList<PipelineEntity>> {
+    fun getAllPipelines(): ResponseEntity<List<Map<String, String>>> {
         return ResponseEntity.ok(kafkaPipelineService.getAllPipelines())
     }
 
@@ -67,18 +74,18 @@ class KafkaPipelineController(
     }
 
     /**
-     * ✅ 파이프라인 등록 요청 DTO
-     */
-    data class PipelineRequest(
-        val groupId: String,
-        val rootTopic: String,
-        val topicRelations: Map<String, List<String>>
-    )
-
-    /**
      * ✅ 파이프라인 실행 요청 DTO
      */
     data class PipelineRunRequest(
         val message: String
+    )
+
+    data class NodeRequest(
+        val id: String,
+        val type: String,
+        val data: String
+    )
+    data class EdgeRequest(
+        val data: String,
     )
 }

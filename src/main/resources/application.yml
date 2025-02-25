@@ -28,7 +28,7 @@ spring:
     jpa:
         database-platform: org.hibernate.dialect.PostgreSQLDialect
         hibernate:
-            ddl-auto: update  # 스키마 자동 생성 전략 (create, update, validate, none)
+            ddl-auto: create  # 스키마 자동 생성 전략 (create, update, validate, none)
         show-sql: true  # 실행되는 SQL 로그 출력
         properties:
             hibernate:

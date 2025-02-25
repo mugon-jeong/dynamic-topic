@@ -1,6 +1,7 @@
 package net.musma.dandi.dynamictopic.domain
 
 import jakarta.persistence.CascadeType
+import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.FetchType
 import jakarta.persistence.Id
@@ -13,7 +14,10 @@ import jakarta.persistence.Table
 @Table(name = "pipeline")
 data class PipelineEntity(
     @Id
-    val groupId: String,
+    val id: String,
+
+    @Column
+    val name: String,
 
     @OneToOne(cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.EAGER)
     @JoinColumn(name = "root_node_id")
