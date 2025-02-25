@@ -51,3 +51,11 @@ interface FlowDetailRes {
 export const getFlow = async (id: string) => {
   return await ky.get(`http://127.0.0.1:8080/pipelines/${id}`).json<FlowDetailRes>();
 }
+
+export const onRunFlow = async (id: string, message:string) => {
+  await ky.post(`http://127.0.0.1:8080/pipelines/${id}/run`,{
+    json: {
+      message,
+    }
+  })
+}
