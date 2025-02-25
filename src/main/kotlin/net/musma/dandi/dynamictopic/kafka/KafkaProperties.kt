@@ -22,7 +22,8 @@ data class KafkaProperties(
         val autoOffsetReset: String = "latest",
         val enableAutoCommit: Boolean = true,
         val keyDeserializer: String = "org.apache.kafka.common.serialization.StringDeserializer",
-        val valueDeserializer: String = "org.apache.kafka.common.serialization.StringDeserializer"
+        val valueDeserializer: String = "org.apache.kafka.common.serialization.StringDeserializer",
+        val groupId: String = "pipeline",
     )
 
     data class ProducerProperties(

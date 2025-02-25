@@ -1,31 +1,21 @@
 package net.musma.dandi.dynamictopic.domain
 
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
-import jakarta.persistence.Column
+import jakarta.persistence.CascadeType
 import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
 import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.OneToOne
 import jakarta.persistence.Table
+
 
 @Entity
 @Table(name = "pipeline")
 data class PipelineEntity(
     @Id
-    val groupId: String, // ✅ 그룹 ID (Primary Key)
+    val groupId: String,
 
-    @Column(columnDefinition = "TEXT") // ✅ JSON 형식으로 저장
-    var topicsJson: String
-) {
-    companion object {
-        private val objectMapper = jacksonObjectMapper()
-
-        fun from(groupId: String, topics: List<String>): PipelineEntity {
-            return PipelineEntity(groupId, objectMapper.writeValueAsString(topics))
-        }
-    }
-
-    fun getTopics(): List<String> = objectMapper.readValue(topicsJson)
-    fun setTopics(topics: List<String>) {
-        topicsJson = objectMapper.writeValueAsString(topics)
-    }
-}
+    @OneToOne(cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.EAGER)
+    @JoinColumn(name = "root_node_id")
+    var rootNode: PipelineNode? = null  // ✅ 루트 노드는 하나만 존재
+)

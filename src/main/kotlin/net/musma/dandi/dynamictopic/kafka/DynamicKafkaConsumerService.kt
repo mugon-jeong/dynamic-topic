@@ -2,6 +2,7 @@ package net.musma.dandi.dynamictopic.kafka
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.annotation.PostConstruct
+import net.musma.dandi.dynamictopic.domain.PipelineNode
 import net.musma.dandi.dynamictopic.domain.PipelineRepository
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener
@@ -17,7 +18,7 @@ import org.springframework.kafka.listener.ConcurrentMessageListenerContainer
 import org.springframework.kafka.listener.ContainerProperties
 import org.springframework.kafka.listener.MessageListener
 import org.springframework.stereotype.Service
-import java.util.Properties
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 private val logger = KotlinLogging.logger {}
@@ -37,22 +38,11 @@ class DynamicKafkaConsumerService(
         val allPipelines = pipelineRepository.findAll()
         allPipelines.forEach { pipeline ->
             val groupId = pipeline.groupId
-            val topics = pipeline.getTopics()
-
-            topics.forEach { topic ->
-                val consumerKey = ConsumerKey(groupId, topic)
-                startListening(consumerKey) { receive ->
-                    logger.info { "📨 [$topic] 받은 메시지: $receive" }
-
-                    val nextTopic = topics.getOrNull(topics.indexOf(topic) + 1)
-                    if (nextTopic != null) {
-                        sendMessage(nextTopic, receive)
-                        logger.info { "➡️ 메시지 [$receive] 를 [$topic] → [$nextTopic] 로 전달" }
-                    } else {
-                        logger.info { "✅ 최종 토픽 [$topic] 에 도착: $receive" }
-                    }
-                }
-            }
+            val rootNode = pipeline.rootNode ?: return@forEach
+            logger.info { "🔄 파이프라인 등록: $groupId" }
+            registerConsumersRecursively(groupId, rootNode)
+            waitForConsumersActivation(groupId, rootNode)
+            logger.info { "🔄 파이프라인 등록 완료: $groupId" }
         }
 
         logger.info { "✅ 모든 Kafka 컨슈머 자동 등록 완료" }
@@ -68,8 +58,8 @@ class DynamicKafkaConsumerService(
             return
         }
 
-        val containerProperties = createContainerProperties(topic, consumerKey, onMessage)
-        val consumerFactory = DefaultKafkaConsumerFactory<String, String>(createConsumerProperties(groupId))
+        val containerProperties = createContainerProperties(consumerKey, onMessage)
+        val consumerFactory = DefaultKafkaConsumerFactory<String, String>(createConsumerProperties())
         val container = ConcurrentMessageListenerContainer(consumerFactory, containerProperties)
 
         container.start()
@@ -106,20 +96,20 @@ class DynamicKafkaConsumerService(
      * ✅ 메시지 리스너 설정
      */
     private fun createContainerProperties(
-        topic: String,
         consumerKey: ConsumerKey,
         onMessage: (String) -> Unit
     ): ContainerProperties {
+        val topic = consumerKey.toTopic()
         return ContainerProperties(topic).apply {
             setConsumerRebalanceListener(
                 object : ConsumerRebalanceListener {
                     override fun onPartitionsAssigned(partitions: MutableCollection<TopicPartition>) {
-                        logger.info { "✅ Kafka 파티션 할당 완료! Topic: $topic, Assigned Partitions: $partitions" }
+                        logger.info { "✅ Kafka 파티션 할당 완료! Topic: ${topic}, Assigned Partitions: $partitions" }
                         activeConsumers[consumerKey] = true
                     }
 
                     override fun onPartitionsRevoked(partitions: MutableCollection<TopicPartition>) {
-                        logger.warn { "⚠️ Kafka 파티션 회수됨! Topic: $topic, Revoked Partitions: $partitions" }
+                        logger.warn { "⚠️ Kafka 파티션 회수됨! Topic: ${topic}, Revoked Partitions: $partitions" }
                         activeConsumers[consumerKey] = false
                     }
                 },
@@ -184,15 +174,15 @@ class DynamicKafkaConsumerService(
     /**
      * ✅ Kafka 컨슈머 설정
      */
-    private fun createConsumerProperties(groupId: String) = mapOf(
+    private fun createConsumerProperties() = mapOf(
         ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG to kafkaProperties.bootstrapServers,
-        ConsumerConfig.GROUP_ID_CONFIG to groupId,
         ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG to StringDeserializer::class.java.name,
         ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG to StringDeserializer::class.java.name,
         ConsumerConfig.AUTO_OFFSET_RESET_CONFIG to kafkaProperties.consumer.autoOffsetReset,
         ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG to kafkaProperties.consumer.enableAutoCommit,
         ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG to kafkaProperties.properties.request.timeoutMs,
         ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG to kafkaProperties.properties.connections.maxIdleMs,
+        ConsumerConfig.GROUP_ID_CONFIG to kafkaProperties.consumer.groupId,
         ConsumerConfig.METADATA_MAX_AGE_CONFIG to "10000",
         ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG to "10000",
     )
@@ -220,19 +210,43 @@ class DynamicKafkaConsumerService(
         return containers[consumerKey]
     }
 
-    /**
-     * ✅ 기존 컨슈머의 메시지 리스너 변경
-     */
-    fun setOnMessageListener(consumerKey: ConsumerKey, onMessage: (String) -> Unit) {
-        val container = getContainer(consumerKey)
-        if (container != null) {
-            logger.info { "🔄 컨슈머 [$consumerKey]의 메시지 리스너 업데이트" }
-            container.containerProperties.messageListener = MessageListener { record ->
-                val processedMessage = processMessage(record)
-                onMessage(processedMessage)
+    fun registerConsumersRecursively(groupId: String, node: PipelineNode) {
+        startListening(ConsumerKey(groupId, node.topic)) { receive ->
+            logger.info { "📨 [${node.topic}] 받은 메시지: $receive" }
+
+            // ✅ 자식 노드로 메시지 전달
+            node.children.forEach { child ->
+                sendMessage(child.topic, receive)
+                logger.info { "➡️ 메시지 [$receive] 를 [${node.topic}] → [${child.topic}] 로 전달" }
             }
-        } else {
-            logger.warn { "⚠️ 컨슈머 [$consumerKey] 없음. 메시지 리스너 업데이트 불가" }
         }
+
+        // ✅ 재귀적으로 모든 자식 노드에 대해 Kafka Consumer 등록
+        node.children.forEach { child -> registerConsumersRecursively(groupId, child) }
+    }
+
+    /** ✅ 모든 토픽의 `activeConsumers`가 `true`가 될 때까지 대기 */
+    fun waitForConsumersActivation(groupId: String, node: PipelineNode): Boolean {
+        val maxWaitTimeMillis = 15000L  // 최대 대기 시간 (15초)
+        val startTime = System.currentTimeMillis()
+
+        while (System.currentTimeMillis() - startTime < maxWaitTimeMillis) {
+            if (allConsumersActivated(groupId, node)) {
+                logger.info { "✅ 파이프라인 등록 완료 (groupId: $groupId)" }
+                return true
+            }
+            Thread.sleep(500)  // 0.5초마다 상태 체크
+        }
+
+        logger.warn { "⚠️ 파이프라인 등록이 지연됨 (groupId: $groupId) - 일부 토픽이 활성화되지 않음" }
+        return false
+    }
+
+    /** ✅ 모든 토픽이 활성화되었는지 확인하는 함수 */
+    private fun allConsumersActivated(groupId: String, node: PipelineNode): Boolean {
+        val isActive = getConsumerStatus()[ConsumerKey(groupId, node.topic)] == true
+
+        // 모든 자식 노드도 활성화 상태인지 확인 (재귀 호출)
+        return isActive && node.children.all { allConsumersActivated(groupId, it) }
     }
 }

@@ -11,6 +11,7 @@ spring:
             enable-auto-commit: true
             key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
             value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+            group-id: pipeline
         producer:
             acks: all
             retries: 3

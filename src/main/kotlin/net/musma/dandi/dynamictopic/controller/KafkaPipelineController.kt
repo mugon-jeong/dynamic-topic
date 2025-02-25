@@ -1,5 +1,6 @@
 package net.musma.dandi.dynamictopic.controller
 
+import net.musma.dandi.dynamictopic.domain.PipelineEntity
 import net.musma.dandi.dynamictopic.kafka.DynamicKafkaConsumerService
 import net.musma.dandi.dynamictopic.kafka.KafkaPipelineService
 import org.springframework.http.ResponseEntity
@@ -34,8 +35,8 @@ class KafkaPipelineController(
      * ✅ 파이프라인 등록 (POST /pipelines)
      */
     @PostMapping
-    fun registerPipeline(@RequestBody request: PipelineRequest): List<String>? {
-        return kafkaPipelineService.registerPipeline(request.groupId, request.topics)
+    fun registerPipeline(@RequestBody request: PipelineRequest): PipelineEntity {
+        return kafkaPipelineService.registerPipeline(request.groupId,request.rootTopic, request.topicRelations)
     }
 
     /**
@@ -52,7 +53,7 @@ class KafkaPipelineController(
      * ✅ 모든 파이프라인 목록 조회 (GET /pipelines)
      */
     @GetMapping
-    fun getAllPipelines(): ResponseEntity<Map<String, List<String>>> {
+    fun getAllPipelines(): ResponseEntity<MutableList<PipelineEntity>> {
         return ResponseEntity.ok(kafkaPipelineService.getAllPipelines())
     }
 
@@ -70,7 +71,8 @@ class KafkaPipelineController(
      */
     data class PipelineRequest(
         val groupId: String,
-        val topics: List<String>
+        val rootTopic: String,
+        val topicRelations: Map<String, List<String>>
     )
 
     /**
